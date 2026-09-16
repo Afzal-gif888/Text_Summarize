@@ -1,59 +1,55 @@
 # AI Text Summarizer
 
-A complete, production-quality mini project using Python, Flask, Hugging Face Transformers, HTML, CSS, and Vanilla JavaScript.
+A complete, production-quality mini project to summarize long text using AI.
 
 ## Features
-- Paste a large block of text into an input area
-- Generate a concise summary using a pretrained Hugging Face summarization model (`sshleifer/distilbart-cnn-12-6`)
-- Automatically chunks large text to bypass model token limits
-- Live word counter and character limit validation
-- Responsive UI design inspired by modern SaaS applications
-- Built entirely without heavy frontend frameworks
+- **AI-Powered Summarization:** Uses Hugging Face's `sshleifer/distilbart-cnn-12-6` model to generate concise summaries.
+- **Large Text Support:** Automatically chunks large text to bypass transformer input limits.
+- **Modern UI/UX:** Clean, responsive, and accessible interface built with HTML, CSS, and Vanilla JS (No React/Tailwind).
+- **Live Statistics:** Displays word counts and reduction percentages.
 
 ## Technology Stack
-- **Frontend**: HTML5, CSS3, Vanilla JavaScript
-- **Backend**: Python 3, Flask
-- **AI**: Hugging Face Transformers, PyTorch
+- **Frontend:** HTML5, CSS3, Vanilla JavaScript
+- **Backend:** Python 3, Flask
+- **AI/ML:** Hugging Face Transformers, PyTorch, SentencePiece, NumPy
 
-## Project Architecture
+## Folder Structure
 ```
-ai-text-summarizer/
-│
-├── app.py
-├── requirements.txt
-├── README.md
-├── .gitignore
-│
-├── templates/
-│   └── index.html
-│
-└── static/
-    ├── css/
-    │   └── style.css
-    │
-    └── js/
-        └── script.js
+Text_Summarize/
+└── ai-text-summarizer/
+    ├── app.py                 # Main Flask application and API
+    ├── requirements.txt       # Python dependencies
+    ├── README.md              # Project documentation
+    ├── templates/
+    │   └── index.html         # Main HTML file
+    └── static/
+        ├── css/
+        │   └── style.css      # Custom styling
+        └── js/
+            └── script.js      # Frontend logic and API calls
 ```
 
-## Installation Instructions
+## Deployment Instructions
 
-1. **Create a virtual environment (Windows):**
-   ```bash
-   python -m venv venv
-   venv\Scripts\activate
-   ```
+### LOCAL WINDOWS:
+Run these commands from `C:\Users\afzal\Desktop\projects\Text_Summarize`
 
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-   *(Note: This might take some time as it installs PyTorch and Transformers.)*
+```powershell
+python -m venv venv
+venv\Scripts\activate
+pip install -r ai-text-summarizer\requirements.txt
+cd ai-text-summarizer
+python app.py
+```
+*Note: If you run `python app.py` from within `ai-text-summarizer` directly, you must activate the root `venv` first.*
 
-3. **Run the application:**
-   ```bash
-   python app.py
-   ```
-   *(Note: The first startup may take time because Hugging Face will download the pretrained model `sshleifer/distilbart-cnn-12-6`. Subsequent runs will use the locally cached model.)*
+### PRODUCTION:
+Run these commands from `ai-text-summarizer/` where `app.py` is located.
 
-4. **Open in browser:**
-   Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in your web browser.
+```bash
+pip install -r requirements.txt
+gunicorn app:app
+```
+
+## How Hugging Face Works Here
+This project uses the `pipeline("summarization")` from the `transformers` library. The model is loaded exactly once when the Flask server starts, so it can be reused efficiently across multiple API requests without needing to reload the heavy model into memory every time. This is especially important for production servers.

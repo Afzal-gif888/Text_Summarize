@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Text Summarizer | Powered by Hugging Face</title>
+    <meta name="description" content="Turn long text into clear summaries using AI.">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Using Google Fonts for clean typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-container">
+            <h1>AI TextSummarizer</h1>
+            <span class="badge">Powered by Hugging Face</span>
+        </div>
+    </header>
+
+    <main class="app-main">
+        <section class="hero-section">
+            <h2>Turn long text into clear summaries.</h2>
+            <p>Paste an article, document, notes, or any long text. Our AI model will extract the key information and create a concise summary.</p>
+        </section>
+
+        <section class="workspace">
+            <!-- Left Column: Input Card -->
+            <div class="card input-card">
+                <div class="card-header">
+                    <h3>Your Text</h3>
+                    <p>Paste the content you want to summarize.</p>
+                </div>
+                
+                <div class="card-body">
+                    <label for="inputText" class="visually-hidden">Text to summarize</label>
+                    <textarea id="inputText" placeholder="Paste your long text here..." maxlength="15000"></textarea>
+                    
+                    <div class="text-meta">
+                        <span id="wordCount">0 words</span>
+                        <button type="button" id="clearBtn" class="btn-text">Clear</button>
+                    </div>
+                </div>
+
+                <div class="card-footer">
+                    <button type="button" id="generateBtn" class="btn-primary">
+                        <span class="btn-icon">✦</span>
+                        <span class="btn-text-content">Generate Summary</span>
+                    </button>
+                    <div id="errorMsg" class="error-msg" aria-live="polite"></div>
+                </div>
+            </div>
+
+            <!-- Right Column: Output Card -->
+            <div class="card output-card">
+                <div class="card-header">
+                    <h3>Summary</h3>
+                    <p>Your AI-generated summary will appear here.</p>
+                </div>
+
+                <div class="card-body summary-body">
+                    <div id="emptyState" class="empty-state">
+                        <div class="empty-icon">📄</div>
+                        <h4>Your summary is waiting</h4>
+                        <p>Add some text on the left and click Generate Summary.</p>
+                    </div>
+
+                    <div id="summaryResult" class="summary-result hidden">
+                        <div id="summaryText" class="summary-text" aria-live="polite"></div>
+                        
+                        <div class="summary-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Original</span>
+                                <span id="statOriginal" class="stat-value">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Summary</span>
+                                <span id="statSummary" class="stat-value">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Reduced</span>
+                                <span id="statReduction" class="stat-value stat-highlight">-</span>
+                            </div>
+                        </div>
+
+                        <button type="button" id="copyBtn" class="btn-secondary">
+                            Copy
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
