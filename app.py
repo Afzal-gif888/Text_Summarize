@@ -19,7 +19,9 @@ app = Flask(__name__)
 # ─────────────────────────────────────────────
 # MODEL LOADING  (once at startup, not per request)
 # ─────────────────────────────────────────────
-MODEL_NAME = "sshleifer/distilbart-cnn-12-6"
+# distilbart-cnn-6-6: half the encoder layers of 12-6, ~300MB float32 / ~150MB float16
+# Fits comfortably within Render's free tier 512MB RAM limit.
+MODEL_NAME = "sshleifer/distilbart-cnn-6-6"
 
 tokenizer: Optional[BartTokenizer] = None
 model: Optional[BartForConditionalGeneration] = None
@@ -29,7 +31,11 @@ logger.info("Loading tokenizer and model for: %s", MODEL_NAME)
 
 try:
     tokenizer = BartTokenizer.from_pretrained(MODEL_NAME)  # type: ignore[assignment]
-    model = BartForConditionalGeneration.from_pretrained(MODEL_NAME)  # type: ignore[assignment]
+    model = BartForConditionalGeneration.from_pretrained(  # type: ignore[assignment]
+        MODEL_NAME,
+        torch_dtype=torch.float16,   # half-precision: halves RAM usage (~150MB)
+        low_cpu_mem_usage=True,      # reduces peak memory during loading
+    )
     model.eval()  # type: ignore[union-attr]  # transformers dummy stub lacks eval
     logger.info("=== MODEL LOADING SUCCESS ===")
 except Exception:
