@@ -1,0 +1,5 @@
+# Force LF line endings on all platforms for Render-read files
+runtime.txt text eol=lf
+.python-version text eol=lf
+requirements.txt text eol=lf
+*.py text eol=lf
