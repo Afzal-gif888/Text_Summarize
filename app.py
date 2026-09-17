@@ -1,8 +1,9 @@
 import os
 import logging
 import torch
+from typing import Optional
 from flask import Flask, request, jsonify, render_template
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import BartTokenizer, BartForConditionalGeneration
 
 # ─────────────────────────────────────────────
 # Logging
@@ -20,16 +21,16 @@ app = Flask(__name__)
 # ─────────────────────────────────────────────
 MODEL_NAME = "sshleifer/distilbart-cnn-12-6"
 
-tokenizer = None
-model = None
+tokenizer: Optional[BartTokenizer] = None
+model: Optional[BartForConditionalGeneration] = None
 
 logger.info("=== MODEL LOADING START ===")
 logger.info("Loading tokenizer and model for: %s", MODEL_NAME)
 
 try:
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-    model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
-    model.eval()          # inference mode – disables dropout etc.
+    tokenizer = BartTokenizer.from_pretrained(MODEL_NAME)  # type: ignore[assignment]
+    model = BartForConditionalGeneration.from_pretrained(MODEL_NAME)  # type: ignore[assignment]
+    model.eval()  # type: ignore[union-attr]  # transformers dummy stub lacks eval
     logger.info("=== MODEL LOADING SUCCESS ===")
 except Exception:
     # logging.exception prints the full traceback – critical for Render debugging
@@ -54,11 +55,18 @@ def split_text(text, max_words=350):
     ]
 
 
-def summarize_chunk(chunk, max_length=130, min_length=30):
+def summarize_chunk(chunk: str, max_length: int = 130, min_length: int = 30) -> str:
     """
     Tokenize one chunk, generate a summary, and decode it.
     Always runs inside torch.no_grad() to save memory.
+    Caller must ensure tokenizer and model are loaded before calling.
     """
+    # These asserts narrow the Optional types for the type-checker.
+    # At runtime, the /summarize route guard already returns 500
+    # before this function is ever reached when they are None.
+    assert tokenizer is not None, "tokenizer must be loaded"
+    assert model is not None, "model must be loaded"
+
     inputs = tokenizer(
         chunk,
         return_tensors="pt",
@@ -68,7 +76,7 @@ def summarize_chunk(chunk, max_length=130, min_length=30):
     )
 
     with torch.no_grad():
-        summary_ids = model.generate(
+        summary_ids = model.generate(  # type: ignore[union-attr]  # transformers dummy stub lacks generate
             inputs["input_ids"],
             attention_mask=inputs.get("attention_mask"),
             max_length=max_length,
