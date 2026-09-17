@@ -2,7 +2,7 @@ import os
 import gc
 import logging
 import torch
-from typing import Optional
+from typing import Optional, Any
 from flask import Flask, request, jsonify, render_template
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
@@ -25,11 +25,11 @@ app = Flask(__name__)
 # ─────────────────────────────────────────────
 MODEL_NAME = "t5-small"
 
-tokenizer = None
-model = None
+tokenizer: Optional[Any] = None
+model: Optional[Any] = None
 
 
-def load_model():
+def load_model() -> bool:
     """Lazily load the model on server startup or first request."""
     global tokenizer, model
     if model is not None and tokenizer is not None:
@@ -38,7 +38,7 @@ def load_model():
     logger.info("=== MODEL LOADING START: %s ===", MODEL_NAME)
     try:
         tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-        with torch.no_grad():
+        with torch.no_grad():  # type: ignore[operator]
             model = AutoModelForSeq2SeqLM.from_pretrained(
                 MODEL_NAME,
                 low_cpu_mem_usage=True,
@@ -60,12 +60,12 @@ load_model()
 # ─────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────
-MAX_INPUT_TOKENS = 512
+MAX_INPUT_TOKENS = 256
 MAX_INPUT_CHARS  = 15_000
 MIN_WORDS        = 20
 
 
-def split_text(text, max_words=350):
+def split_text(text: str, max_words: int = 250):
     """Split long text into word-count-bounded chunks."""
     words = text.split()
     return [
@@ -74,10 +74,10 @@ def split_text(text, max_words=350):
     ]
 
 
-def summarize_chunk(chunk: str, max_length: int = 130, min_length: int = 30) -> str:
+def summarize_chunk(chunk: str, max_length: int = 100, min_length: int = 20) -> str:
     """
     Tokenize one chunk, generate a summary, and decode it.
-    Always runs inside torch.no_grad() to save memory.
+    Always runs inside torch.no_grad() with num_beams=1 to save memory.
     """
     assert tokenizer is not None, "tokenizer must be loaded"
     assert model is not None, "model must be loaded"
@@ -91,15 +91,14 @@ def summarize_chunk(chunk: str, max_length: int = 130, min_length: int = 30) -> 
         padding=False,
     )
 
-    with torch.no_grad():
-        summary_ids = model.generate(
+    with torch.no_grad():  # type: ignore[operator]
+        summary_ids = model.generate(  # type: ignore[union-attr]
             inputs["input_ids"],
             attention_mask=inputs.get("attention_mask"),
             max_length=max_length,
             min_length=min_length,
-            num_beams=2,
-            length_penalty=2.0,
-            early_stopping=True,
+            num_beams=1,           # Greedy decoding: keeps peak RAM under 500MB
+            do_sample=False,
             no_repeat_ngram_size=3,
         )
 
@@ -152,13 +151,13 @@ def summarize():
 
     # Summarise
     try:
-        chunks = split_text(text, max_words=350)
+        chunks = split_text(text, max_words=250)
         summarized_chunks = []
 
         for i, chunk in enumerate(chunks):
             chunk_word_count = len(chunk.split())
-            max_len = min(130, max(30, int(chunk_word_count * 0.6)))
-            min_len = min(30, max(10, int(chunk_word_count * 0.2)))
+            max_len = min(100, max(25, int(chunk_word_count * 0.6)))
+            min_len = min(25, max(10, int(chunk_word_count * 0.2)))
 
             logger.info("Summarising chunk %d/%d (%d words)...", i + 1, len(chunks), chunk_word_count)
             chunk_summary = summarize_chunk(chunk, max_length=max_len, min_length=min_len)
