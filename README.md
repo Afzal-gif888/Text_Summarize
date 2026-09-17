@@ -1,5 +1,7 @@
 # AI Text Summarizer
 
+Deployment lInk:- https://text-summarize-05dj.onrender.com
+
 A complete, production-quality mini project to summarize long text using AI.
 
 ## Features
