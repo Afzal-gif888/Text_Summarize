@@ -1,9 +1,13 @@
 import os
+import gc
 import logging
 import torch
 from typing import Optional
 from flask import Flask, request, jsonify, render_template
-from transformers import BartTokenizer, BartForConditionalGeneration
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+# Limit PyTorch CPU thread count to 1 to reduce RAM footprint on cloud containers
+torch.set_num_threads(1)
 
 # ─────────────────────────────────────────────
 # Logging
@@ -17,37 +21,46 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # ─────────────────────────────────────────────
-# MODEL LOADING  (once at startup, not per request)
+# MODEL LOADING  (t5-small: ~60M params, ~68MB peak RAM)
 # ─────────────────────────────────────────────
-# distilbart-cnn-6-6: half the encoder layers of 12-6, ~300MB float32 / ~150MB float16
-# Fits comfortably within Render's free tier 512MB RAM limit.
-MODEL_NAME = "sshleifer/distilbart-cnn-6-6"
+MODEL_NAME = "t5-small"
 
-tokenizer: Optional[BartTokenizer] = None
-model: Optional[BartForConditionalGeneration] = None
+tokenizer = None
+model = None
 
-logger.info("=== MODEL LOADING START ===")
-logger.info("Loading tokenizer and model for: %s", MODEL_NAME)
 
-try:
-    tokenizer = BartTokenizer.from_pretrained(MODEL_NAME)  # type: ignore[assignment]
-    model = BartForConditionalGeneration.from_pretrained(  # type: ignore[assignment]
-        MODEL_NAME,
-        torch_dtype=torch.float16,   # half-precision: halves RAM usage (~150MB)
-        low_cpu_mem_usage=True,      # reduces peak memory during loading
-    )
-    model.eval()  # type: ignore[union-attr]  # transformers dummy stub lacks eval
-    logger.info("=== MODEL LOADING SUCCESS ===")
-except Exception:
-    # logging.exception prints the full traceback – critical for Render debugging
-    logger.exception("=== MODEL LOADING ERROR – full traceback below ===")
-    tokenizer = None
-    model = None
+def load_model():
+    """Lazily load the model on server startup or first request."""
+    global tokenizer, model
+    if model is not None and tokenizer is not None:
+        return True
+
+    logger.info("=== MODEL LOADING START: %s ===", MODEL_NAME)
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+        with torch.no_grad():
+            model = AutoModelForSeq2SeqLM.from_pretrained(
+                MODEL_NAME,
+                low_cpu_mem_usage=True,
+            )
+            model.eval()
+        gc.collect()
+        logger.info("=== MODEL LOADING SUCCESS ===")
+        return True
+    except Exception:
+        logger.exception("=== MODEL LOADING ERROR – full traceback below ===")
+        tokenizer = None
+        model = None
+        return False
+
+
+# Attempt eager model loading at startup
+load_model()
 
 # ─────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────
-MAX_INPUT_TOKENS = 1024   # DistilBART's hard limit
+MAX_INPUT_TOKENS = 512
 MAX_INPUT_CHARS  = 15_000
 MIN_WORDS        = 20
 
@@ -65,29 +78,26 @@ def summarize_chunk(chunk: str, max_length: int = 130, min_length: int = 30) -> 
     """
     Tokenize one chunk, generate a summary, and decode it.
     Always runs inside torch.no_grad() to save memory.
-    Caller must ensure tokenizer and model are loaded before calling.
     """
-    # These asserts narrow the Optional types for the type-checker.
-    # At runtime, the /summarize route guard already returns 500
-    # before this function is ever reached when they are None.
     assert tokenizer is not None, "tokenizer must be loaded"
     assert model is not None, "model must be loaded"
 
+    prompt_text = "summarize: " + chunk
     inputs = tokenizer(
-        chunk,
+        prompt_text,
         return_tensors="pt",
         max_length=MAX_INPUT_TOKENS,
-        truncation=True,         # safely truncate if chunk still too long
+        truncation=True,
         padding=False,
     )
 
     with torch.no_grad():
-        summary_ids = model.generate(  # type: ignore[union-attr]  # transformers dummy stub lacks generate
+        summary_ids = model.generate(
             inputs["input_ids"],
             attention_mask=inputs.get("attention_mask"),
             max_length=max_length,
             min_length=min_length,
-            num_beams=4,
+            num_beams=2,
             length_penalty=2.0,
             early_stopping=True,
             no_repeat_ngram_size=3,
@@ -106,18 +116,18 @@ def index():
 
 @app.route("/summarize", methods=["POST"])
 def summarize():
-    # ── 1. Model health check ──────────────────
-    if model is None or tokenizer is None:
+    # Ensure model is loaded (lazy fallback)
+    if not load_model():
         logger.error("SUMMARIZATION REQUEST ERROR – model not loaded.")
         return jsonify({
             "success": False,
             "error": (
-                "The summarization model failed to load on server startup. "
-                "Please check the server logs for the full error traceback."
+                "The summarization model failed to load. "
+                "Please check the server logs for details."
             ),
         }), 500
 
-    # ── 2. Parse & validate request ───────────
+    # Parse & validate request
     data = request.get_json(silent=True)
     if not data or "text" not in data:
         return jsonify({"success": False, "error": "Invalid request. JSON body with 'text' key required."}), 400
@@ -140,7 +150,7 @@ def summarize():
             "error": f"Text is too short to summarize. Please provide at least {MIN_WORDS} words.",
         }), 400
 
-    # ── 3. Summarise ──────────────────────────
+    # Summarise
     try:
         chunks = split_text(text, max_words=350)
         summarized_chunks = []
