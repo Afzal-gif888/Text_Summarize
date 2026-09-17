@@ -1,6 +1,6 @@
-Flask
-transformers
-torch
-sentencepiece
+Flask==3.0.3
+gunicorn==22.0.0
 numpy==1.26.4
-gunicorn
+torch==2.2.2
+transformers==4.41.2
+sentencepiece==0.2.0
