@@ -37,13 +37,16 @@ def load_model() -> bool:
 
     logger.info("=== MODEL LOADING START: %s ===", MODEL_NAME)
     try:
-        loaded_tok = AutoTokenizer.from_pretrained(MODEL_NAME)
-        loaded_mod = AutoModelForSeq2SeqLM.from_pretrained(
+        tokenizer_cls: Any = AutoTokenizer
+        model_cls: Any = AutoModelForSeq2SeqLM
+
+        loaded_tok = tokenizer_cls.from_pretrained(MODEL_NAME)
+        loaded_mod = model_cls.from_pretrained(
             MODEL_NAME,
             low_cpu_mem_usage=True,
         )
         if loaded_mod is not None and hasattr(loaded_mod, "eval"):
-            loaded_mod.eval()  # type: ignore[no-untyped-call]
+            loaded_mod.eval()
 
         tokenizer = loaded_tok
         model = loaded_mod
@@ -94,8 +97,8 @@ def summarize_chunk(chunk: str, max_length: int = 100, min_length: int = 20) -> 
         padding=False,
     )
 
-    with torch.no_grad():  # type: ignore[attr-defined]
-        summary_ids = model.generate(  # type: ignore[union-attr]
+    with torch.no_grad():
+        summary_ids = model.generate(
             inputs["input_ids"],
             attention_mask=inputs.get("attention_mask"),
             max_length=max_length,
